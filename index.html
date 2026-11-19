@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Tzoonarium sensor test (not the game)</title>
+<style>
+  :root { --cw:#22d3ee; --ccw:#ff5fb0; --dim:#8a86a8; --line:#2a2450; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; background:#06031a; color:#fff; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  body { padding: 12px 12px 40px; max-width: 460px; margin: 0 auto; touch-action: manipulation; }
+  h1 { font-size: 15px; margin: 4px 0 2px; letter-spacing: .06em; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 10px; }
+  .row { display:flex; gap:8px; margin: 8px 0; }
+  button { flex:1; font: inherit; font-size: 15px; font-weight: 700; padding: 14px 8px; border-radius: 12px; border: 2px solid #fff; background:#14103a; color:#fff; }
+  button.on { background:#0b6b3a; border-color:#5cffa0; }
+  button:active { transform: scale(.98); }
+  #status { padding: 8px 10px; border-radius: 10px; background:#14103a; border:1px solid var(--line); font-size: 13px; line-height: 1.35; }
+  #status b.ok { color:#5cffa0 } #status b.bad { color:#ff8a8a } #status b.wait { color:#ffd34d }
+  canvas { display:block; width:100%; background:#0a0620; border:1px solid var(--line); border-radius: 14px; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .card { background:#0e0a2c; border:1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+  .card .k { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing:.08em; }
+  .card .v { font-size: 26px; font-weight: 800; margin-top: 2px; white-space: nowrap; }
+  .card.wide { grid-column: 1 / 3; }
+  .card.wide .v { font-size: 30px; }
+  .cw { color: var(--cw); } .ccw { color: var(--ccw); } .still { color:#bbb; }
+  #log { font-size: 12px; color:#cfd; min-height: 18px; line-height: 1.5; }
+  details { margin: 10px 0; background:#0e0a2c; border:1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+  summary { cursor: pointer; font-size: 13px; color:#cfcbe8; }
+  .diag { font-size: 12px; line-height: 1.6; color:#cfcbe8; margin-top:6px; }
+  .diag i { color: var(--dim); font-style: normal; }
+  input[type=range] { width:100%; }
+  .small { font-size: 12px; color: var(--dim); line-height: 1.5; }
+  ol { padding-left: 18px; margin: 6px 0; font-size: 12px; color:#cfcbe8; line-height: 1.55; }
+</style>
+</head>
+<body>
+<h1>TZOONARIUM · SENSOR TEST</h1>
+<div class="sub">A small separate test page. It is not Cosmic Catch and has no game in it. Hold the phone upright like your eyes and turn your body.</div>
+
+<div class="row">
+  <button id="bOn">SENSOR: OFF</button>
+  <button id="bReset">RESET to 0</button>
+</div>
+<div id="status"><b class="wait">Sensor is off.</b> Press SENSOR to start.</div>
+
+<div style="margin-top:10px"><canvas id="dial" width="600" height="600"></canvas></div>
+
+<div class="grid">
+  <div class="card wide"><div class="k">Direction</div><div class="v still" id="vDir">STILL</div></div>
+  <div class="card"><div class="k">Angle now (0 = where you started)</div><div class="v" id="vAng">0.0°</div></div>
+  <div class="card"><div class="k">Speed</div><div class="v" id="vSpd">0 °/s</div></div>
+  <div class="card wide"><div class="k">Accumulated rotation (signed, no wrap)</div><div class="v" id="vAcc">+0.0°</div></div>
+  <div class="card"><div class="k">Full turns (net)</div><div class="v" id="vTurns">0</div></div>
+  <div class="card"><div class="k">Total ↻ / ↺</div><div class="v" style="font-size:16px;line-height:1.5" id="vTot">0° / 0°</div></div>
+</div>
+<div class="card"><div class="k">Turn log</div><div id="log">no full turn yet</div></div>
+
+<div style="margin-top:10px"><canvas id="pano" width="720" height="150"></canvas></div>
+<div class="small" style="margin-top:4px">Strip: what you would see looking around. The marks should slide opposite to the way you turn (turn right, the world slides left).</div>
+
+<details>
+  <summary>Manual test (no phone: use the slider, the buttons or drag on the dial)</summary>
+  <div class="diag">
+    <input type="range" id="man" min="0" max="360" step="0.5" value="0">
+    <div class="row"><button id="bM-">−15°</button><button id="bM+">+15°</button><button id="bM+360">+360° in steps</button></div>
+    <div class="small">Manual input goes through the same code as the phone. Use it to check the numbers on a computer.</div>
+  </div>
+</details>
+
+<details open>
+  <summary>Diagnostics (tell me what you see here if something does not work)</summary>
+  <div class="diag" id="diag"></div>
+</details>
+
+<details>
+  <summary>How to test on the phone</summary>
+  <ol>
+    <li>Press SENSOR. If the phone asks for motion access, allow it.</li>
+    <li>Hold the phone upright in front of you, screen toward you, like a window.</li>
+    <li>Press RESET to 0. Now turn your whole body slowly to the right: the direction should say CLOCKWISE, the angle and the accumulated rotation should go up.</li>
+    <li>Keep turning until you are back where you started: accumulated should be about +360° and a full turn is logged.</li>
+    <li>Turn the other way, past zero: the accumulated rotation goes negative.</li>
+    <li>Hold still for 20 seconds: does the accumulated number drift? Write the drift down.</li>
+    <li>Tilt the phone (look up, look down, hold it flatter) while turning: does the number stay right?</li>
+  </ol>
+</details>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const norm180 = a => { a = ((a + 180) % 360 + 360) % 360 - 180; return a === -180 ? 180 : a; };
+const mod360 = a => ((a % 360) + 360) % 360;
+
+/* ---------- pure maths: from the phone's three angles to a body heading ---------- */
+// W3C order: R = Rz(alpha) * Rx(beta) * Ry(gamma); world: x east, y north, z up.
+function mat(alpha, beta, gamma) {
+  const a = alpha * D2R, b = beta * D2R, g = gamma * D2R;
+  const cA = Math.cos(a), sA = Math.sin(a), cB = Math.cos(b), sB = Math.sin(b), cG = Math.cos(g), sG = Math.sin(g);
+  // M = Rx(b) * Ry(g)
+  const M = [[cG, 0, sG], [sB * sG, cB, -sB * cG], [-cB * sG, sB, cB * cG]];
+  return [[cA * M[0][0] - sA * M[1][0], cA * M[0][1] - sA * M[1][1], cA * M[0][2] - sA * M[1][2]],
+          [sA * M[0][0] + cA * M[1][0], sA * M[0][1] + cA * M[1][1], sA * M[0][2] + cA * M[1][2]],
+          M[2]];
+}
+// The "eyes" direction: the back of the phone (camera side) when the phone is upright, the top edge when it lies flat.
+function headingOf(alpha, beta, gamma) {
+  const R = mat(alpha, beta, gamma);
+  const fx = -R[0][2], fy = -R[1][2];           // where the back of the phone points (horizontal part)
+  const tx = R[0][1], ty = R[1][1];             // where the top edge points (horizontal part)
+  const zUp = R[2][2];                          // > 0: the screen faces up
+  const fm = Math.hypot(fx, fy), w = (1 - Math.min(1, fm)) * (zUp >= 0 ? 1 : -1);
+  const hx = fx + w * tx, hy = fy + w * ty;
+  return { deg: mod360(Math.atan2(hx, hy) * R2D), mag: Math.hypot(hx, hy), mode: fm >= .5 ? 'back' : 'top' };
+}
+
+/* ---------- tracker: continuous rotation across the 360 / 0 border ---------- */
+const T = { src: null, prev: null, ref: null, acc: 0, cw: 0, ccw: 0, speed: 0, lastT: 0, turnsK: 0, dir: 0, log: [], last: null, hold: null };
+function resetTracker() {
+  const keep = T.hold != null ? T.hold : T.prev;
+  Object.assign(T, { prev: keep, ref: keep, acc: 0, cw: 0, ccw: 0, speed: 0, turnsK: 0, dir: 0, lastT: 0 });
+  T.log = []; render();
+}
+function feed(deg, tms, src) {                  // deg: heading 0..360, any start; tms: time in ms; src: 'phone' or 'manual'
+  T.hold = deg;
+  if (src !== T.src) { T.src = src; T.prev = null; }   // another source starts from its own direction: no fake jump
+  if (T.prev == null) { T.prev = deg; if (T.ref == null) T.ref = deg; T.lastT = tms; return; }
+  let d = norm180(deg - T.prev);
+  if (Math.abs(d) < 0.03) d = 0;
+  T.prev = deg;
+  const dt = Math.max(.001, (tms - T.lastT) / 1000); T.lastT = tms;
+  T.acc += d; if (d > 0) T.cw += d; else T.ccw -= d;
+  const inst = d / dt;
+  T.speed += (inst - T.speed) * Math.min(1, dt * 6);
+  if (T.dir === 0 && Math.abs(T.speed) > 4) T.dir = Math.sign(T.speed);
+  else if (T.dir !== 0 && Math.abs(T.speed) < 2.5) T.dir = 0;
+  else if (T.dir !== 0 && Math.abs(T.speed) > 4 && Math.sign(T.speed) !== T.dir) T.dir = Math.sign(T.speed);
+  const k = Math.trunc(T.acc / 360);
+  if (k !== T.turnsK) {
+    const up = Math.abs(k) > Math.abs(T.turnsK);
+    if (up) T.log.unshift('FULL TURN ' + (k > T.turnsK ? 'clockwise ↻' : 'counter-clockwise ↺') + ' · net ' + k + ' · ' + new Date().toLocaleTimeString());
+    T.turnsK = k; if (T.log.length > 6) T.log.pop();
+  }
+}
+
+/* ---------- sensor input ---------- */
+const S = { on: false, evCount: 0, perSec: 0, hz: [], absT: -1e9, src: '-', raw: null, perm: 'not asked', first: 0, mode: '-', lastMag: 0, warned: false, manual: false };
+function onOrient(e, tag) {
+  if (!S.on) return;
+  if (e.alpha == null || e.beta == null || e.gamma == null) return;
+  const now = performance.now();
+  if (tag === 'abs') S.absT = now; else if (now - S.absT < 600) return;   // prefer the absolute event when the phone gives both
+  S.evCount++; S.hz.push(now); S.src = tag === 'abs' ? 'deviceorientationabsolute' : 'deviceorientation' + (e.absolute ? ' (absolute)' : ' (relative)');
+  S.raw = { a: e.alpha, b: e.beta, g: e.gamma, ios: e.webkitCompassHeading };
+  const h = headingOf(e.alpha, e.beta, e.gamma);
+  S.mode = h.mode; S.lastMag = h.mag;
+  if (h.mag < .05) return;                        // pointing straight up or down: no horizontal direction, keep the last one
+  S.manual = false;
+  feed(h.deg, now, 'phone');
+}
+function addListeners() {
+  if (S.added) return; S.added = true;
+  window.addEventListener('deviceorientationabsolute', e => onOrient(e, 'abs'), true);
+  window.addEventListener('deviceorientation', e => onOrient(e, 'rel'), true);
+}
+async function sensorOn() {
+  T.prev = null; S.on = true; S.evCount = 0; S.hz = []; S.warned = false; S.first = performance.now();
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission(); S.perm = r;
+      if (r !== 'granted') { setStatus('bad', 'Motion access was refused (' + r + '). On iPhone: close the page, open it again and allow motion and orientation access. You can use the manual test below.'); }
+    } else S.perm = 'not needed on this browser';
+  } catch (err) { S.perm = 'error: ' + (err && err.message ? err.message : err); setStatus('bad', 'The browser would not give motion access: ' + S.perm); }
+  addListeners(); $('bOn').textContent = 'SENSOR: ON'; $('bOn').classList.add('on'); render();
+}
+function sensorOff() { T.prev = null; S.on = false; $('bOn').textContent = 'SENSOR: OFF'; $('bOn').classList.remove('on'); setStatus('wait', 'Sensor is off.'); render(); }
+$('bOn').onclick = () => { S.on ? sensorOff() : sensorOn(); };
+$('bReset').onclick = () => resetTracker();
+
+/* ---------- manual input (same pipeline) ---------- */
+let manH = 0;
+function manualSet(h) { manH = mod360(h); $('man').value = manH; S.manual = true; feed(manH, performance.now(), 'manual'); render(); }
+$('man').oninput = e => manualSet(+e.target.value);
+$('bM-').onclick = () => manualSet(manH - 15);
+$('bM+').onclick = () => manualSet(manH + 15);
+$('bM+360').onclick = () => { let i = 0; const id = setInterval(() => { manualSet(manH + 10); if (++i >= 36) clearInterval(id); }, 40); };
+
+/* ---------- status text ---------- */
+function setStatus(cls, txt) { $('status').innerHTML = '<b class="' + cls + '">' + txt.split(':')[0] + (txt.includes(':') ? ':' : '') + '</b>' + (txt.includes(':') ? txt.slice(txt.indexOf(':') + 1) : ''); }
+function statusTick() {
+  const now = performance.now();
+  S.hz = S.hz.filter(t => now - t < 1000); S.perSec = S.hz.length;
+  if (!S.on) return;
+  if (S.evCount > 0 && S.perSec > 0) setStatus('ok', 'SENSOR ACTIVE: ' + S.perSec + ' readings per second from ' + S.src + '.');
+  else if (S.evCount > 0) setStatus('wait', 'WAITING: readings stopped. Is the phone lying completely still, or did the browser pause the sensor?');
+  else if (now - S.first > 2000) {
+    S.warned = true;
+    setStatus('bad', 'NO SENSOR DATA: the page received nothing. Likely reasons: the page runs inside a frame that blocks motion sensors; the page is not on a secure (https) address; motion access was not allowed; or this device has no orientation sensor. Use the manual test, and read the diagnostics below.');
+  } else setStatus('wait', 'WAITING for the first reading...');
+}
+setInterval(statusTick, 300);
+
+/* ---------- drawing ---------- */
+const dial = $('dial'), dctx = dial.getContext('2d'), pano = $('pano'), pctx = pano.getContext('2d');
+const stars = Array.from({ length: 26 }, (_, i) => ({ az: (i * 137.5) % 360, y: .15 + ((i * 53) % 70) / 100, r: 1.2 + (i % 4) * .7, c: ['#fff', '#22d3ee', '#ff5fb0', '#ffd34d'][i % 4] }));
+function drawDial() {
+  const c = dctx, w = dial.width, cx = w / 2, cy = w / 2, R = w * .43;
+  c.clearRect(0, 0, w, w);
+  const col = T.dir > 0 ? '#22d3ee' : T.dir < 0 ? '#ff5fb0' : '#9a96bd';
+  // rotating ring: the world turns opposite to you
+  c.save(); c.translate(cx, cy); c.rotate(-T.acc * D2R);
+  c.strokeStyle = '#2a2450'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, R, 0, 6.2832); c.stroke();
+  for (let a = 0; a < 360; a += 10) {
+    const big = a % 90 === 0, mid = a % 30 === 0, r1 = R - (big ? 34 : mid ? 22 : 12), ang = (a - 90) * D2R;
+    c.strokeStyle = big ? '#fff' : mid ? '#bdb8e8' : '#5a5590'; c.lineWidth = big ? 4 : 2;
+    c.beginPath(); c.moveTo(Math.cos(ang) * R, Math.sin(ang) * R); c.lineTo(Math.cos(ang) * r1, Math.sin(ang) * r1); c.stroke();
+    if (mid) { c.save(); c.translate(Math.cos(ang) * (R - 52), Math.sin(ang) * (R - 52)); c.rotate(T.acc * D2R); c.fillStyle = big ? '#fff' : '#9a96bd'; c.font = (big ? 'bold ' : '') + '26px ui-monospace, monospace'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(a === 0 ? 'START' : a, 0, 0); c.restore(); }
+  }
+  c.restore();
+  // progress arc of the current turn
+  const frac = (T.acc % 360) / 360;
+  c.lineWidth = 14; c.lineCap = 'round'; c.strokeStyle = frac >= 0 ? '#22d3ee' : '#ff5fb0';
+  c.beginPath(); if (frac >= 0) c.arc(cx, cy, R + 14, -Math.PI / 2, -Math.PI / 2 + frac * 6.2832); else c.arc(cx, cy, R + 14, -Math.PI / 2, -Math.PI / 2 + frac * 6.2832, true); c.stroke();
+  // fixed pointer: where you look
+  c.fillStyle = col; c.beginPath(); c.moveTo(cx, cy - R + 46); c.lineTo(cx - 22, cy - R + 92); c.lineTo(cx + 22, cy - R + 92); c.closePath(); c.fill();
+  // centre text
+  c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.font = 'bold 74px ui-monospace, monospace'; c.fillText(mod360(T.acc).toFixed(0) + '°', cx, cy - 6);
+  c.font = '26px ui-monospace, monospace'; c.fillStyle = col; c.fillText(T.dir > 0 ? 'CLOCKWISE ↻' : T.dir < 0 ? 'COUNTER-CLOCKWISE ↺' : 'STILL', cx, cy + 56);
+}
+function drawPano() {
+  const c = pctx, w = pano.width, h = pano.height, fov = 100, view = T.acc;
+  c.clearRect(0, 0, w, h); c.fillStyle = '#0a0620'; c.fillRect(0, 0, w, h);
+  const X = az => w / 2 + norm180(az - view) / fov * w;
+  for (let a = -360; a < 720; a += 15) {
+    const x = X(a); if (x < -40 || x > w + 40) continue;
+    const big = mod360(a) % 90 === 0, mid = mod360(a) % 30 === 0;
+    c.strokeStyle = big ? '#fff' : mid ? '#8a86c0' : '#3a3470'; c.lineWidth = big ? 3 : 1.5;
+    c.beginPath(); c.moveTo(x, h - 4); c.lineTo(x, h - (big ? 36 : mid ? 26 : 14)); c.stroke();
+    if (mid) { c.fillStyle = big ? '#fff' : '#8a86c0'; c.font = (big ? 'bold ' : '') + '20px ui-monospace, monospace'; c.textAlign = 'center'; c.fillText(mod360(a) === 0 ? 'START' : mod360(a), x, h - 42); }
+  }
+  for (const s of stars) { const x = X(s.az); if (x < -10 || x > w + 10) continue; c.fillStyle = s.c; c.beginPath(); c.arc(x, 14 + s.y * (h - 80), s.r * 2.2, 0, 6.2832); c.fill(); }
+  c.strokeStyle = '#ffd34d'; c.lineWidth = 2; c.setLineDash([6, 6]); c.beginPath(); c.moveTo(w / 2, 0); c.lineTo(w / 2, h); c.stroke(); c.setLineDash([]);
+}
+function fmt(n, d) { return (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(d); }
+function render() {
+  const dirTxt = T.dir > 0 ? 'CLOCKWISE ↻' : T.dir < 0 ? 'COUNTER-CLOCKWISE ↺' : 'STILL';
+  const v = $('vDir'); v.textContent = dirTxt; v.className = 'v ' + (T.dir > 0 ? 'cw' : T.dir < 0 ? 'ccw' : 'still');
+  $('vAng').textContent = mod360(T.acc).toFixed(1) + '°';
+  $('vSpd').textContent = Math.abs(T.speed) < 1 ? '0 °/s' : fmt(T.speed, 0) + ' °/s';
+  $('vAcc').textContent = fmt(T.acc, 1) + '°';
+  $('vTurns').textContent = (T.turnsK >= 0 ? '' : '−') + Math.abs(T.turnsK) + '  (' + (T.acc / 360).toFixed(2) + ')';
+  $('vTot').textContent = T.cw.toFixed(0) + '° / ' + T.ccw.toFixed(0) + '°';
+  $('log').innerHTML = T.log.length ? T.log.join('<br>') : 'no full turn yet';
+  const r = S.raw;
+  $('diag').innerHTML =
+    '<i>secure context (https):</i> ' + (window.isSecureContext ? 'yes' : 'NO') + '<br>' +
+    '<i>inside a frame:</i> ' + (window.top !== window ? 'yes (frames can block sensors)' : 'no') + '<br>' +
+    '<i>orientation API present:</i> ' + (typeof DeviceOrientationEvent !== 'undefined' ? 'yes' : 'NO') + '<br>' +
+    '<i>permission:</i> ' + S.perm + '<br>' +
+    '<i>readings:</i> ' + S.evCount + ' total, ' + S.perSec + ' per second<br>' +
+    '<i>source:</i> ' + S.src + '<br>' +
+    '<i>raw alpha / beta / gamma:</i> ' + (r ? r.a.toFixed(1) + ' / ' + r.b.toFixed(1) + ' / ' + r.g.toFixed(1) : '-') + '<br>' +
+    '<i>iPhone compass heading (info only):</i> ' + (r && r.ios != null ? r.ios.toFixed(1) : '-') + '<br>' +
+    '<i>eyes direction taken from:</i> ' + S.mode + ' of the phone (strength ' + S.lastMag.toFixed(2) + ')<br>' +
+    '<i>input now:</i> ' + (S.manual ? 'MANUAL' : S.on ? 'PHONE' : 'none');
+}
+function decay() { const now = performance.now(); if (T.lastT && now - T.lastT > 250 && (T.speed !== 0 || T.dir !== 0)) { T.speed *= .85; if (Math.abs(T.speed) < 2.5) { T.dir = 0; if (Math.abs(T.speed) < .5) T.speed = 0; } } }
+function loop() { decay(); drawDial(); drawPano(); render(); requestAnimationFrame(loop); }
+// drag on the dial = manual heading
+let dragging = false;
+dial.addEventListener('pointerdown', e => { dragging = true; dial.setPointerCapture(e.pointerId); dragAt(e); });
+dial.addEventListener('pointermove', e => { if (dragging) dragAt(e); });
+dial.addEventListener('pointerup', () => { dragging = false; });
+function dragAt(e) { const r = dial.getBoundingClientRect(); const x = e.clientX - r.left - r.width / 2, y = e.clientY - r.top - r.height / 2; manualSet(Math.atan2(x, -y) * R2D); }
+window.__tz = { T, S, feed, headingOf, resetTracker, norm180 };   // hook for the headless test
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
